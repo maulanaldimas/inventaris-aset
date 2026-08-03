@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background-color: #f8fafc;
+    color: #1e293b;
+  }
+}
+
+@media print {
+  .print\:hidden {
+    display: none !important;
+  }
+  #area-print {
+    box-shadow: none !important;
+  }
+  .print\:grid {
+    display: grid !important;
+  }
+  .print\:grid-cols-3 {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+  .print\:justify-items-center {
+    justify-items: center !important;
+  }
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
+  main {
+    margin-left: 0 !important;
+  }
+}
