@@ -1,34 +1,34 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '../../../../lib/supabase'
+import { api } from '../../../../lib/api'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
+import { ArrowLeft, Save } from 'lucide-react'
 import Sidebar from '../../../../components/sidebar'
+import { inputCls, labelCls, btnPrimary, btnSecondary, cardCls, mainCls } from '../../../../components/ui'
 
 export default function EditLokasiPage() {
     const [formData, setFormData] = useState({ name: '', building: '', floor: '' })
-    const [loading, setLoading] = useState(false)
-    const [fetching, setFetching] = useState(true)
+    const [memuat, setMemuat] = useState(true)
+    const [menyimpan, setMenyimpan] = useState(false)
     const router = useRouter()
     const params = useParams()
 
     useEffect(() => {
-        fetchLocation()
-    }, [])
-
-    const fetchLocation = async () => {
-        const { data, error } = await supabase
-            .from('locations')
-            .select('*')
-            .eq('id', params.id)
-            .single()
-
-        if (data) {
-            setFormData({ name: data.name, building: data.building || '', floor: data.floor || '' })
+        const fetchLocation = async () => {
+            try {
+                const data = await api.get(`/api/locations/${params.id}`)
+                const loc = data.location
+                setFormData({ name: loc.name, building: loc.building || '', floor: loc.floor || '' })
+            } catch {
+                toast.error('Gagal memuat data lokasi')
+            }
+            setMemuat(false)
         }
-        setFetching(false)
-    }
+        fetchLocation()
+    }, [params.id])
 
     const handleChange = (e) => {
         const { name, value } = e.target
@@ -37,26 +37,24 @@ export default function EditLokasiPage() {
 
     const handleSubmit = async (e) => {
         e.preventDefault()
-        setLoading(true)
-        const { error } = await supabase
-            .from('locations')
-            .update(formData)
-            .eq('id', params.id)
-
-        if (error) {
-            alert('Error: ' + error.message)
-        } else {
+        setMenyimpan(true)
+        try {
+            await api.put(`/api/locations/${params.id}`, formData)
+            toast.success('Perubahan berhasil disimpan')
             router.push('/lokasi')
+            return
+        } catch (err) {
+            toast.error(err.message || 'Gagal menyimpan perubahan')
         }
-        setLoading(false)
+        setMenyimpan(false)
     }
 
-    if (fetching) {
+    if (memuat) {
         return (
             <div className="flex">
                 <Sidebar />
-                <main className="ml-64 flex-1 p-8 bg-gray-50 min-h-screen flex items-center justify-center">
-                    <p className="text-gray-500">Memuat...</p>
+                <main className={`${mainCls} grid place-items-center`}>
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
                 </main>
             </div>
         )
@@ -65,32 +63,39 @@ export default function EditLokasiPage() {
     return (
         <div className="flex">
             <Sidebar />
-            <main className="ml-64 flex-1 p-8 bg-gray-50 min-h-screen">
+            <main className={mainCls}>
                 <div className="max-w-2xl">
                     <div className="mb-6">
-                        <Link href="/lokasi" className="text-blue-600 hover:text-blue-800"> ← Kembali </Link>
-                        <h1 className="text-3xl font-bold text-gray-800 mt-2">Edit Lokasi</h1>
+                        <Link href="/lokasi" className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 transition hover:text-indigo-500">
+                            <ArrowLeft className="h-4 w-4" />
+                            Kembali
+                        </Link>
+                        <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">Edit Lokasi</h1>
+                        <p className="mt-1 text-sm text-slate-500">Perbarui detail lokasi penyimpanan</p>
                     </div>
-                    <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-4">
+
+                    <form onSubmit={handleSubmit} className={`${cardCls} p-6 md:p-8 space-y-5`}>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Nama Lokasi *</label>
-                            <input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required />
+                            <label htmlFor="name" className={labelCls}>Nama Lokasi *</label>
+                            <input id="name" type="text" name="name" value={formData.name} onChange={handleChange} className={inputCls} required />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Gedung</label>
-                                <input type="text" name="building" value={formData.building} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                                <label htmlFor="building" className={labelCls}>Gedung</label>
+                                <input id="building" type="text" name="building" value={formData.building} onChange={handleChange} className={inputCls} />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Lantai</label>
-                                <input type="text" name="floor" value={formData.floor} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                                <label htmlFor="floor" className={labelCls}>Lantai</label>
+                                <input id="floor" type="text" name="floor" value={formData.floor} onChange={handleChange} className={inputCls} />
                             </div>
                         </div>
-                        <div className="flex gap-4 pt-4">
-                            <button type="submit" disabled={loading} className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium disabled:bg-gray-400">
-                                {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
+
+                        <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-5">
+                            <button type="submit" disabled={menyimpan} className={`${btnPrimary} flex-1 sm:flex-none`}>
+                                <Save className="h-4 w-4" />
+                                {menyimpan ? 'Menyimpan...' : 'Simpan Perubahan'}
                             </button>
-                            <Link href="/lokasi" className="flex-1 bg-gray-300 text-gray-800 py-2 rounded-lg text-center hover:bg-gray-400 font-medium">
+                            <Link href="/lokasi" className={`${btnSecondary} flex-1 sm:flex-none`}>
                                 Batal
                             </Link>
                         </div>

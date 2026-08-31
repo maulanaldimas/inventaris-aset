@@ -1,104 +1,145 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '../../lib/supabase'
+import toast from 'react-hot-toast'
+import { Boxes, Wallet, AlertTriangle, ArrowLeftRight, LogOut } from 'lucide-react'
+import { api } from '../../lib/api'
 import Sidebar from '../../components/sidebar'
+import { Badge, StatCard, EmptyState, PageHeader } from '../../components/ui'
+import { STATUS_ASET, KONDISI_ASET } from '../../lib/constants'
+import { formatRupiah } from '../../lib/format'
+import { useProfile } from '../../lib/use-profile'
 
 export default function Dashboard() {
   const router = useRouter()
-  const [stats, setStats] = useState({ total: 0, baik: 0, rusak: 0, dipinjam: 0 })
+  const { profile } = useProfile()
+  const [stats, setStats] = useState({ total: 0, nilai: 0, baik: 0, rusak: 0, dipinjam: 0 })
   const [assets, setAssets] = useState([])
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-      setUser(user)
-      const { data } = await supabase.from('assets').select('*')
-      if (data) {
-        setAssets(data)
+      try {
+        const me = await api.get('/api/auth/me')
+        if (!me.profile) { router.replace('/login'); return }
+        setUser({ email: me.profile.email })
+      } catch {
+        router.replace('/login')
+        return
+      }
+      try {
+        const data = await api.get('/api/assets')
+        setAssets(data.assets)
         setStats({
-          total: data.length,
-          baik: data.filter(a => a.condition === 'Baik').length,
-          rusak: data.filter(a => a.condition === 'Rusak').length,
-          dipinjam: data.filter(a => a.status === 'Dipinjam').length,
+          total: data.assets.length,
+          nilai: data.assets.reduce((sum, a) => sum + (Number(a.purchase_price) || 0), 0),
+          rusak: data.assets.filter(a => a.condition === 'Rusak').length,
+          dipinjam: data.assets.filter(a => a.status === 'Dipinjam').length,
         })
+      } catch {
+        toast.error('Gagal memuat data aset')
       }
       setLoading(false)
     }
     init()
-  }, [])
+  }, [router])
 
-  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login') }
+  const handleLogout = async () => {
+    try {
+      await api.post('/api/auth/logout')
+    } finally {
+      router.replace('/login')
+    }
+  }
 
   if (loading) return (
     <div className="flex">
       <Sidebar />
-      <main className="ml-64 flex-1 min-h-screen flex items-center justify-center">
-        <p className="text-gray-500">Memuat...</p>
+      <main className="ml-64 flex-1 grid min-h-screen place-items-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
+          <p className="text-sm text-slate-500">Memuat dashboard...</p>
+        </div>
       </main>
     </div>
   )
 
+  const asetTerbaru = [...assets]
+    .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+    .slice(0, 5)
+
   return (
     <div className="flex">
       <Sidebar />
-      <main className="ml-64 flex-1 p-8 bg-gray-50 min-h-screen">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
-            <p className="text-gray-600">Ringkasan inventaris aset</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">{user?.email}</span>
-            <button onClick={handleLogout} className="text-sm text-red-500 hover:text-red-700 font-medium">Keluar</button>
-          </div>
+      <main className="ml-64 flex-1 p-6 md:p-8 min-h-screen bg-slate-50">
+        <PageHeader
+          title="Dashboard"
+          description={`Selamat datang, ${profile?.full_name || user?.email}`}
+        >
+          <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            {user?.email}
+          </span>
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-red-500 transition hover:bg-red-50 hover:text-red-600"
+          >
+            <LogOut className="h-4 w-4" />
+            Keluar
+          </button>
+        </PageHeader>
+
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:gap-6 mb-8">
+          <StatCard icon={Boxes} label="Total Aset" value={stats.total} tone="indigo" />
+          <StatCard icon={Wallet} label="Nilai Aset" value={formatRupiah(stats.nilai)} tone="emerald" />
+          <StatCard icon={ArrowLeftRight} label="Sedang Dipinjam" value={stats.dipinjam} tone="amber" />
+          <StatCard icon={AlertTriangle} label="Kondisi Rusak" value={stats.rusak} tone="rose" />
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {[
-            { label: 'Total Aset', value: stats.total, icon: '📦' },
-            { label: 'Kondisi Baik', value: stats.baik, icon: '✅' },
-            { label: 'Rusak', value: stats.rusak, icon: '⚠️' },
-            { label: 'Dipinjam', value: stats.dipinjam, icon: '🔄' },
-          ].map(s => (
-            <div key={s.label} className="bg-white rounded-lg shadow p-5">
-              <div className="text-2xl mb-2">{s.icon}</div>
-              <div className="text-3xl font-bold text-gray-800">{s.value}</div>
-              <div className="text-sm text-gray-500 mt-1">{s.label}</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b flex justify-between items-center">
-            <h3 className="font-semibold text-gray-800">Daftar Aset Terbaru</h3>
-            <button onClick={() => router.push('/aset')} className="text-sm text-blue-600 hover:underline">Lihat semua →</button>
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+            <h3 className="text-sm font-semibold text-slate-900">Aset Terbaru</h3>
+            <button onClick={() => router.push('/aset')} className="text-sm font-medium text-indigo-600 transition hover:text-indigo-500">
+              Lihat semua →
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-100 border-b">
+              <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>{['Kode', 'Nama Aset', 'Kategori', 'Kondisi', 'Status'].map(h => (
-                  <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-700">{h}</th>
+                  <th key={h} className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">{h}</th>
                 ))}</tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
-                {assets.slice(0, 5).map(a => (
-                  <tr key={a.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{a.code}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{a.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{a.category}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${a.condition === 'Baik' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {a.condition}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{a.status}</td>
+              <tbody className="divide-y divide-slate-100">
+                {asetTerbaru.map(a => (
+                  <tr key={a.id} className="transition hover:bg-slate-50/60">
+                    <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-900">{a.code}</td>
+                    <td className="px-6 py-4 font-medium text-slate-900">{a.name}</td>
+                    <td className="px-6 py-4 text-slate-600">{a.category || '-'}</td>
+                    <td className="px-6 py-4"><Badge label={a.condition} map={KONDISI_ASET} /></td>
+                    <td className="px-6 py-4"><Badge label={a.status} map={STATUS_ASET} /></td>
                   </tr>
                 ))}
               </tbody>
+              {asetTerbaru.length === 0 && (
+                <tfoot>
+                  <tr>
+                    <td colSpan={5}>
+                      <EmptyState
+                        icon={Boxes}
+                        title="Belum ada aset"
+                        description="Mulai dengan menambahkan aset pertama perusahaan Anda."
+                        action={
+                          <button onClick={() => router.push('/aset/tambah')} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                            Tambah Aset
+                          </button>
+                        }
+                      />
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>

@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  staff
+}
+
+model Company {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  logoUrl      String?
+  primaryColor String   @default("#4f46e5")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profiles     Profile[]
+  locations    Location[]
+  assets       Asset[]
+  borrowings   Borrowing[]
+  activityLogs ActivityLog[]
+}
+
+model Profile {
+  id           String   @id @db.Uuid
+  email        String   @unique
+  passwordHash String
+  fullName     String?
+  phone        String?
+  jobTitle     String?
+  avatarUrl    String?
+  role         Role     @default(staff)
+  companyId    String?  @db.Uuid
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company      Company?  @relation(fields: [companyId], references: [id])
+  activityLogs ActivityLog[]
+
+  @@index([companyId])
+}
+
+model Location {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  building  String?
+  floor     String?
+  companyId String   @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+  assets  Asset[]
+
+  @@index([companyId])
+}
+
+model Asset {
+  id            String    @id @default(uuid()) @db.Uuid
+  code          String
+  name          String
+  category      String?
+  brand         String?
+  condition     String    @default("Baik")
+  status        String    @default("Tersedia")
+  locationId    String?   @db.Uuid
+  purchaseDate  DateTime? @db.Date
+  purchasePrice Float?
+  photoUrl      String?
+  notes         String?
+  companyId     String    @db.Uuid
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company    Company     @relation(fields: [companyId], references: [id])
+  location   Location?   @relation(fields: [locationId], references: [id])
+  borrowings Borrowing[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([locationId])
+}
+
+model Borrowing {
+  id           String    @id @default(uuid()) @db.Uuid
+  assetId      String    @db.Uuid
+  borrowerName String
+  department   String?
+  borrowDate   DateTime  @db.Date
+  returnDate   DateTime? @db.Date
+  returnedAt   DateTime?
+  status       String    @default("Dipinjam")
+  notes        String?
+  companyId    String    @db.Uuid
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+  asset   Asset   @relation(fields: [assetId], references: [id])
+
+  @@index([companyId])
+  @@index([assetId])
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  companyId  String   @db.Uuid
+  userId     String   @db.Uuid
+  actorEmail String
+  entity     String
+  entityId   String?
+  action     String
+  detail     String?
+  createdAt  DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id])
+  user    Profile @relation(fields: [userId], references: [id])
+
+  @@index([companyId, createdAt])
+}

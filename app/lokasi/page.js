@@ -1,110 +1,154 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { supabase } from '../../lib/supabase'
+import { api } from '../../lib/api'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
+import { Plus, Search, Pencil, Trash2, MapPin, Building2 } from 'lucide-react'
 import Sidebar from '../../components/sidebar'
+import { useKonfirmasi } from '../../components/confirm'
+import {
+    EmptyState,
+    PageHeader,
+    TableSkeleton,
+    btnPrimary,
+    inputCls,
+    mainCls,
+    cardCls,
+} from '../../components/ui'
+import { useProfile } from '../../lib/use-profile'
 
 export default function LokasiPage() {
     const [locations, setLocations] = useState([])
     const [search, setSearch] = useState('')
     const [loading, setLoading] = useState(true)
-    const [role, setRole] = useState(null)
+    const [refreshKey, setRefreshKey] = useState(0)
+    const konfirmasi = useKonfirmasi()
+    const { profile } = useProfile()
+
+    const role = profile?.role
 
     useEffect(() => {
-        fetchLocations()
-        fetchRole()
-    }, [])
-
-    const fetchRole = async () => {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-            const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-            setRole(data?.role || null)
+        const fetchLocations = async () => {
+            try {
+                const data = await api.get('/api/locations')
+                setLocations(data.locations)
+            } catch {
+                toast.error('Gagal memuat data lokasi')
+            }
+            setLoading(false)
         }
-    }
 
-    const fetchLocations = async () => {
-        setLoading(true)
-        const { data } = await supabase
-            .from('locations')
-            .select('*')
-            .order('created_at', { ascending: false })
-        setLocations(data || [])
-        setLoading(false)
-    }
+        fetchLocations()
+    }, [refreshKey])
 
-    const deleteLocation = async (id) => {
-        if (confirm('Yakin ingin hapus lokasi ini?')) {
-            await supabase.from('locations').delete().eq('id', id)
-            fetchLocations()
+    const deleteLocation = async (loc) => {
+        const ya = await konfirmasi({
+            title: 'Hapus lokasi ini?',
+            message: `${loc.name} akan dihapus permanen. Aset yang terhubung tidak ikut terhapus.`,
+            confirmText: 'Ya, Hapus',
+        })
+        if (!ya) return
+        try {
+            await api.del(`/api/locations/${loc.id}`)
+            toast.success('Lokasi berhasil dihapus')
+            setRefreshKey((key) => key + 1)
+        } catch (err) {
+            toast.error(err.message || 'Gagal menghapus lokasi')
         }
     }
 
     const filteredLocations = locations.filter(loc =>
-        loc.name.toLowerCase().includes(search.toLowerCase())
+        (loc.name || '').toLowerCase().includes(search.toLowerCase())
     )
 
     return (
         <div className="flex">
             <Sidebar />
-            <main className="ml-64 flex-1 p-8 bg-gray-50 min-h-screen">
-                <div className="flex justify-between items-center mb-8">
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-800">Daftar Lokasi</h1>
-                        <p className="text-gray-600">Kelola lokasi penyimpanan aset</p>
-                    </div>
+            <main className={mainCls}>
+                <PageHeader title="Daftar Lokasi" description={`Kelola ${locations.length} lokasi penyimpanan aset`}>
                     {role === 'admin' && (
-                        <Link href="/lokasi/tambah" className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700">
-                            + Tambah Lokasi
+                        <Link href="/lokasi/tambah" className={btnPrimary}>
+                            <Plus className="h-4 w-4" />
+                            Tambah Lokasi
                         </Link>
                     )}
+                </PageHeader>
+
+                <div className={`${cardCls} mb-6 p-4`}>
+                    <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Cari nama lokasi..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className={`${inputCls} pl-9`}
+                        />
+                    </div>
                 </div>
 
-                <div className="bg-white rounded-lg shadow p-6 mb-6">
-                    <input
-                        type="text"
-                        placeholder="Cari nama lokasi..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                </div>
-
-                <div className="bg-white rounded-lg shadow overflow-hidden">
+                <div className={`${cardCls} overflow-hidden`}>
                     {loading ? (
-                        <p className="p-6 text-center text-gray-600">Memuat data...</p>
+                        <table className="w-full">
+                            <thead className="bg-slate-50 border-b border-slate-100">
+                                <tr>{['Lokasi', 'Gedung', 'Lantai', 'Aksi'].map(h => (
+                                    <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">{h}</th>
+                                ))}</tr>
+                            </thead>
+                            <TableSkeleton rows={5} cols={4} />
+                        </table>
                     ) : filteredLocations.length === 0 ? (
-                        <p className="p-6 text-center text-gray-600">Tidak ada lokasi</p>
+                        <EmptyState
+                            icon={MapPin}
+                            title="Tidak ada lokasi"
+                            description={
+                                search
+                                    ? 'Tidak ada lokasi yang cocok dengan pencarian.'
+                                    : 'Belum ada lokasi tercatat. Tambahkan lokasi untuk mengelompokkan aset.'
+                            }
+                        />
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full">
-                                <thead className="bg-gray-100 border-b">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700">Nama Lokasi</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700">Gedung</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700">Lantai</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-700">Aksi</th>
-                                    </tr>
+                                <thead className="bg-slate-50 border-b border-slate-100">
+                                    <tr>{['Lokasi', 'Gedung', 'Lantai', 'Aksi'].map(h => (
+                                        <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">{h}</th>
+                                    ))}</tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-200">
+                                <tbody className="divide-y divide-slate-100">
                                     {filteredLocations.map(loc => (
-                                        <tr key={loc.id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 text-sm font-medium text-gray-900">{loc.name}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{loc.building}</td>
-                                            <td className="px-6 py-4 text-sm text-gray-600">{loc.floor}</td>
-                                            <td className="px-6 py-4">
+                                        <tr key={loc.id} className="group transition hover:bg-slate-50/60">
+                                            <td className="px-5 py-3.5">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="grid h-10 w-10 place-items-center rounded-lg bg-indigo-50">
+                                                        <Building2 className="h-4 w-4 text-indigo-500" />
+                                                    </div>
+                                                    <span className="text-sm font-medium text-slate-900">{loc.name}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-5 py-3.5 text-sm text-slate-600">{loc.building || '-'}</td>
+                                            <td className="px-5 py-3.5 text-sm text-slate-600">{loc.floor || '-'}</td>
+                                            <td className="px-5 py-3.5">
                                                 {role === 'admin' ? (
-                                                    <>
-                                                        <Link href={`/lokasi/edit/${loc.id}`} className="text-blue-600 hover:text-blue-900 mr-4">
-                                                            Edit
+                                                    <div className="flex items-center gap-1 opacity-60 transition group-hover:opacity-100">
+                                                        <Link
+                                                            href={`/lokasi/edit/${loc.id}`}
+                                                            title="Edit lokasi"
+                                                            className="rounded-md p-2 text-sky-500 transition hover:bg-sky-50 hover:text-sky-600"
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
                                                         </Link>
-                                                        <button onClick={() => deleteLocation(loc.id)} className="text-red-600 hover:text-red-900">
-                                                            Hapus
+                                                        <button
+                                                            onClick={() => deleteLocation(loc)}
+                                                            title="Hapus lokasi"
+                                                            className="rounded-md p-2 text-red-500 transition hover:bg-red-50 hover:text-red-600"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
                                                         </button>
-                                                    </>
+                                                    </div>
                                                 ) : (
-                                                    <span className="text-gray-400 text-sm">-</span>
+                                                    <span className="text-sm text-slate-300">-</span>
                                                 )}
                                             </td>
                                         </tr>

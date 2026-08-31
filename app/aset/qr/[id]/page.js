@@ -2,31 +2,31 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { supabase } from '../../../../lib/supabase'
+import { api } from '../../../../lib/api'
 import Link from 'next/link'
 import Sidebar from '../../../../components/sidebar'
+import toast from 'react-hot-toast'
 import { QRCodeSVG } from 'qrcode.react'
+import { ArrowLeft, Printer } from 'lucide-react'
+import { btnPrimary, cardCls, mainCls } from '../../../../components/ui'
 
 export default function QRAsetPage() {
     const params = useParams()
     const [asset, setAsset] = useState(null)
     const [loading, setLoading] = useState(true)
-    const [urlScan, setUrlScan] = useState('')
 
     useEffect(() => {
+        const fetchAsset = async () => {
+            try {
+                const data = await api.get(`/api/assets/${params.id}`)
+                setAsset(data.asset)
+            } catch {
+                toast.error('Gagal memuat data aset')
+            }
+            setLoading(false)
+        }
         fetchAsset()
-        setUrlScan(`${window.location.origin}/scan/${params.id}`)
-    }, [])
-
-    const fetchAsset = async () => {
-        const { data } = await supabase
-            .from('assets')
-            .select('*')
-            .eq('id', params.id)
-            .single()
-        setAsset(data)
-        setLoading(false)
-    }
+    }, [params.id])
 
     const handlePrint = () => {
         window.print()
@@ -36,8 +36,8 @@ export default function QRAsetPage() {
         return (
             <div className="flex">
                 <Sidebar />
-                <main className="ml-64 flex-1 p-8 bg-gray-50 min-h-screen flex items-center justify-center">
-                    <p className="text-gray-500">Memuat...</p>
+                <main className={`${mainCls} grid place-items-center`}>
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
                 </main>
             </div>
         )
@@ -48,26 +48,34 @@ export default function QRAsetPage() {
             <div className="print:hidden">
                 <Sidebar />
             </div>
-            <main className="ml-64 flex-1 p-8 bg-gray-50 min-h-screen">
-                <div className="max-w-md">
+            <main className={`${mainCls} print:p-0`}>
+                <div className="mx-auto max-w-sm print:max-w-none">
                     <div className="mb-6 print:hidden">
-                        <Link href="/aset" className="text-blue-600 hover:text-blue-800"> ← Kembali </Link>
-                        <h1 className="text-3xl font-bold text-gray-800 mt-2">QR Code Aset</h1>
+                        <Link href="/aset" className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 transition hover:text-indigo-500">
+                            <ArrowLeft className="h-4 w-4" />
+                            Kembali
+                        </Link>
+                        <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">QR Code Aset</h1>
+                        <p className="mt-1 text-sm text-slate-500">Cetak dan tempelkan label pada aset</p>
                     </div>
 
-                    <div className="bg-white rounded-lg shadow p-6 text-center" id="area-print">
-                        <div className="flex justify-center mb-4">
-                            <QRCodeSVG value={urlScan} size={200} />
+                    <div id="area-print" className={`${cardCls} p-8 text-center`}>
+                        <div className="mb-5 flex justify-center rounded-xl border border-dashed border-slate-200 p-6 print:border-0 print:p-0">
+                            <QRCodeSVG
+                                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/scan/${asset.id}`}
+                                size={192}
+                            />
                         </div>
-                        <h2 className="font-bold text-gray-800">{asset.name}</h2>
-                        <p className="text-sm text-gray-500 font-mono">{asset.code}</p>
+                        <h2 className="text-base font-bold text-slate-900">{asset.name}</h2>
+                        <span className="mt-2 inline-block rounded-full bg-slate-100 px-3 py-1 font-mono text-xs font-semibold tracking-wide text-slate-600">
+                            {asset.code}
+                        </span>
+                        <p className="mt-3 text-xs text-slate-400">Scan QR untuk melihat detail aset</p>
                     </div>
 
-                    <button
-                        onClick={handlePrint}
-                        className="w-full mt-4 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-medium print:hidden"
-                    >
-                        🖨️ Cetak QR Code
+                    <button onClick={handlePrint} className={`${btnPrimary} mt-5 w-full print:hidden`}>
+                        <Printer className="h-4 w-4" />
+                        Cetak QR Code
                     </button>
                 </div>
             </main>
