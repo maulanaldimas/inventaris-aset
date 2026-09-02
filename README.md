@@ -1,6 +1,12 @@
 # 📦 Inventaris Aset
 
-Sistem manajemen aset perusahaan multi-tenant berbasis web: pencatatan aset, lokasi penyimpanan, peminjaman, label QR code, riwayat aktivitas (audit trail), dan laporan siap ekspor. Dibangun dengan Next.js + PostgreSQL (Prisma), dikemas dalam Docker, siap deploy ke Railway.
+Sistem manajemen aset perusahaan multi-tenant berbasis web: pencatatan aset, lokasi penyimpanan, peminjaman, label QR code, riwayat aktivitas (audit trail), dan laporan siap ekspor. Dibangun dengan Next.js + PostgreSQL (Prisma), dikemas dalam Docker.
+
+> **Demo live:** https://itsokkalink.tailbc5ae7.ts.net/inventaris
+>
+> **Login admin demo:** `admin@example.com` / `admin12345`
+>
+> > Demo ini di-hosting dari komputer pribadi (Docker + Tailscale Funnel + Caddy) dan hanya aktif saat server daring.
 
 ## Fitur
 
